@@ -4,13 +4,13 @@ OBJECTS := $(OBJECTS:.cpp=.o)
 HEADERS := $(wildcard *.h include/*.h)
 
 COMMON   := -O2 -Wall -Wformat=2 -Wno-format-nonliteral -DNDEBUG
-CFLAGS   := $(CFLAGS) $(COMMON) -I/opt/homebrew/opt/openssl/include -I/opt/homebrew/Cellar/gmp/6.3.0/include
-CXXFLAGS := $(CXXFLAGS) $(COMMON) -I/opt/homebrew/opt/openssl/include -I/opt/homebrew/Cellar/gmp/6.3.0/include
+CFLAGS   := $(CFLAGS) $(COMMON) -std=c99 -I/opt/homebrew/opt/gmp/include -I/opt/homebrew/opt/openssl@3/include
+CXXFLAGS := $(CXXFLAGS) $(COMMON) -std=c++11 -I/opt/homebrew/opt/gmp/include -I/opt/homebrew/opt/openssl@3/include
 CC       := gcc
 CXX      := g++
 LD       := $(CC)
-LDFLAGS  := $(LDFLAGS) -L/opt/homebrew/opt/openssl/lib # -L/path/to/libs/ -L/opt/homebrew/Cellar/gmp/6.3.0/include
-LDADD    := -lpthread -lcrypto -lgmp -lssl -lcrypto $(shell pkg-config --libs gtk+-3.0)
+LDFLAGS  := $(LDFLAGS) -L/opt/homebrew/opt/gmp/lib -L/opt/homebrew/opt/openssl@3/lib # -L/path/to/libs/
+LDADD    := -lpthread -lcrypto -lgmp $(shell pkg-config --libs gtk+-3.0)
 INCLUDE  := $(shell pkg-config --cflags gtk+-3.0)
 DEFS     := # -DLINUX
 
