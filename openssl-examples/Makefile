@@ -4,9 +4,9 @@ HEADERS := $(wildcard *.h)
 TARGETS := examples
 
 COMMON   := -O2 -Wall
-CFLAGS   := $(CFLAGS) $(COMMON)
+CFLAGS   := $(CFLAGS) $(COMMON) $(shell pkg-config --cflags openssl)
 CC       := gcc
-LDADD    := -lcrypto -lssl
+LDADD    :=  $(shell pkg-config --libs openssl) -lcrypto -lssl
 LD       := $(CC)
 
 all : $(TARGETS)

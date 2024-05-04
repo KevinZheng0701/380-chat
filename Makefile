@@ -4,12 +4,12 @@ OBJECTS := $(OBJECTS:.cpp=.o)
 HEADERS := $(wildcard *.h include/*.h)
 
 COMMON   := -O2 -Wall -Wformat=2 -Wno-format-nonliteral -DNDEBUG
-CFLAGS   := $(CFLAGS) $(COMMON) -std=c99 -I/opt/homebrew/opt/gmp/include -I/opt/homebrew/opt/openssl@3/include
-CXXFLAGS := $(CXXFLAGS) $(COMMON) -std=c++11 -I/opt/homebrew/opt/gmp/include -I/opt/homebrew/opt/openssl@3/include
+CFLAGS   := $(CFLAGS) $(COMMON) $(shell pkg-config --cflags gmp openssl)
+CXXFLAGS := $(CXXFLAGS) $(COMMON) $(shell pkg-config --cflags gmp openssl)
 CC       := gcc
 CXX      := g++
 LD       := $(CC)
-LDFLAGS  := $(LDFLAGS) -L/opt/homebrew/opt/gmp/lib -L/opt/homebrew/opt/openssl@3/lib # -L/path/to/libs/
+LDFLAGS  := $(LDFLAGS) $(shell pkg-config --libs gmp openssl) # -L/path/to/libs/
 LDADD    := -lpthread -lcrypto -lgmp $(shell pkg-config --libs gtk+-3.0)
 INCLUDE  := $(shell pkg-config --cflags gtk+-3.0)
 DEFS     := # -DLINUX

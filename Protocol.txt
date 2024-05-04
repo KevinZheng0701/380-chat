@@ -1,0 +1,32 @@
+Secure Chat System Protocol:
+
+Authentication Handshake (SSH):
+
+To establish a secure handshake at the beginning of each session, we employ the Diffie-Hellman key exchange with ephemeral keys, complemented by unique session tokens and hashing procedures.
+Here's a breakdown of the key exchange process:
+    1. Both parties agree on the necessary keys for the exchange, including a large prime p and a generator g required for the Diffie-Hellman exchange.
+    2. The client generates a secret integer a and computes the public key g^a, which is sent to the server.
+    3. The server generates a secret integer b and computes g^b, which is then sent to the client.
+    4. The server also generates a unique session token and computes the hash of the secret key g^ab concatenated with the session token, which is sent to the client.
+    5. Upon receiving g^b, the client computes the shared secret key and generates its own session token independently.
+    6. The client computes the hash of the shared secret g^ab along with its session token and sends it to the server.
+    7. Both parties use a key derivation function to derive session keys from the shared secret obtained through the Diffie-Hellman key exchange.
+    8. After authentication, RSA keys are generated for message encruption and decryption.
+    9. Clean up all traces of exchanges in the chat system.
+
+Message Encryption(RSA with HMAC):
+
+The process for encrypting messages involves the following steps:
+    1. A pseudo-random key is generated and encrypted using RSA to be used as the shared key for symmetric encryption.
+    2. The encrypted shared key is sent to the other party.
+    3. Encrpyt the message using RSA.
+    4. Compute the ciphertext as the following: c = ENC(message) HMAC(sessionID | random key).
+
+Message Decryption:
+
+Decryption of messages involves the following steps:
+    1. The ciphertext is broken up into the encrypted message and the HMAC.
+    2. Decrpyt the secret key to get the pseudo-random key from the other party.
+    3. Compute the hash along with the other party's sessionID.
+    4. Verify that the hash is consisent with the received HMAC.
+    5. Once verified, decrpyt the message using RSA.
