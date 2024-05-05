@@ -10,8 +10,8 @@ Here's a breakdown of the key exchange process:
     4. The server also generates a unique session token and computes the hash of the secret key g^ab concatenated with the session token, which is sent to the client.
     5. Upon receiving g^b, the client computes the shared secret key and generates its own session token independently.
     6. The client computes the hash of the shared secret g^ab along with its session token and sends it to the server.
-    7. Both parties use a key derivation function to derive session keys from the shared secret obtained through the Diffie-Hellman key exchange.
-    8. After authentication, RSA keys are generated for message encruption and decryption.
+    7. Both parties use the session keys to ensure the Diffie-Hellman key exchange is authenticated.
+    8. After authentication, RSA keys are generated for message encryption and decryption.
     9. Clean up all traces of exchanges in the chat system.
 
 Message Encryption(RSA with HMAC):
@@ -19,7 +19,7 @@ Message Encryption(RSA with HMAC):
 The process for encrypting messages involves the following steps:
     1. A pseudo-random key is generated and encrypted using RSA to be used as the shared key for symmetric encryption.
     2. The encrypted shared key is sent to the other party.
-    3. Encrpyt the message using RSA.
+    3. Encrypt the message using RSA.
     4. Compute the ciphertext as the following: c = ENC(message) HMAC(sessionID | random key).
 
 Message Decryption:
