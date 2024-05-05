@@ -1,3 +1,4 @@
 chat
 dh-example
 *.bin
+.vscode/
