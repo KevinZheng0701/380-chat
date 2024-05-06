@@ -4,6 +4,11 @@
 #include "rsa.h"
 #include "prf.h"
 
+/* NOTE: a random composite surviving 10 Miller-Rabin tests is extremely
+ * unlikely.  See Pomerance et al.:
+ * http://www.ams.org/mcom/1993-61-203/S0025-5718-1993-1189518-9/
+ * */
+
 #define ISPRIME(x) mpz_probab_prime_p(x, 10)
 #define NEWZ(x) \
     mpz_t x;    \
@@ -53,6 +58,10 @@ int zFromFile(FILE *f, mpz_t x)
 int rsa_keyGen(size_t keyBits, RSA_KEY *K)
 {
     rsa_initKey(K);
+    /* TODO: write this.  Use the prf to get random byte strings of
+     * the right length, and then test for primality (see the ISPRIME
+     * macro above).  Once you've found the primes, set up the other
+     * pieces of the key ({en,de}crypting exponents, and n=pq). */
     size_t halfKeyBits = keyBits / 2;
     NEWZ(p);
     NEWZ(q);
@@ -91,16 +100,7 @@ int rsa_keyGen(size_t keyBits, RSA_KEY *K)
     mpz_mul(totient, pminus1, qminus1);
     // Generate e where GCD(e, (p-1)*(q-1)) = 1, one commonly used one is 65537
     NEWZ(e);
-    NEWZ(gcd);
-    NEWZ(one);
-    mpz_set_ui(one, 1);
-    do
-    {
-        randBytes(buf, len);
-        BYTES2Z(e, buf, len);
-        mpz_gcd(gcd, e, totient);
-    } while (mpz_cmp_ui(gcd, 1) != 0);
-
+    mpz_set_ui(e, 65537);
     // Generate the private d key
     NEWZ(d);
     mpz_invert(d, e, totient);
@@ -119,8 +119,6 @@ int rsa_keyGen(size_t keyBits, RSA_KEY *K)
     mpz_clear(pminus1);
     mpz_clear(qminus1);
     mpz_clear(totient);
-    mpz_clear(gcd);
-    mpz_clear(one);
     free(buf);
     return 0;
 }
@@ -128,6 +126,8 @@ int rsa_keyGen(size_t keyBits, RSA_KEY *K)
 size_t rsa_encrypt(unsigned char *outBuf, unsigned char *inBuf, size_t len,
                    RSA_KEY *K)
 {
+    /* TODO: write this.  Use BYTES2Z to get integers, and then
+     * Z2BYTES to write the output buffer. */
     NEWZ(ciphertext);
     NEWZ(message);
     // convert buffer message to integer
@@ -141,14 +141,15 @@ size_t rsa_encrypt(unsigned char *outBuf, unsigned char *inBuf, size_t len,
     }
     // perform the one way function
     mpz_powm(ciphertext, message, K->e, K->n);
-    size_t ciphertextLength = mpz_sizeinbase(ciphertext, 256);
     // convert the ciphertext integer back to bytes
+    size_t ciphertextLength = 0;
     Z2BYTES(outBuf, ciphertextLength, ciphertext);
     // free up memory
     mpz_clear(message);
     mpz_clear(ciphertext);
     return ciphertextLength; /* TODO: return should be # bytes written */
 }
+
 size_t rsa_decrypt(unsigned char *outBuf, unsigned char *inBuf, size_t len,
                    RSA_KEY *K)
 {
@@ -159,8 +160,8 @@ size_t rsa_decrypt(unsigned char *outBuf, unsigned char *inBuf, size_t len,
     BYTES2Z(ciphertext, inBuf, len);
     // reverse the ciphertext using the secret key
     mpz_powm(message, ciphertext, K->d, K->n);
-    size_t messageLength = mpz_sizeinbase(message, 256);
     // convert the message integer back to bytes
+    size_t messageLength = (mpz_sizeinbase(message, 2) + 7) / 8;
     Z2BYTES(outBuf, messageLength, message);
     // free up memory
     mpz_clear(message);
@@ -235,5 +236,9 @@ int rsa_shredKey(RSA_KEY *K)
             mpz_clear(*L[i]);
         }
     }
+    /* NOTE: a quick look at the gmp source reveals that the return of
+     * mpz_limbs_write is only different than the existing limbs when
+     * the number requested is larger than the allocation (which is
+     * of course larger than mpz_size(X)) */
     return 0;
 }
