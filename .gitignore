@@ -1,4 +1,4 @@
 chat
 dh-example
-*.bin
+*.pem
 .vscode/

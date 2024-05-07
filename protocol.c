@@ -3,10 +3,10 @@
 #include <unistd.h>
 #include <string.h>
 #include <gmp.h>
+#include "protocol.h"
 #include "rsa.h"
 #include "prf.h"
-#include "hmac_sha.h"
-#include <openssl/rsa.h>
+#include "hmac.h"
 
 #define KEYLEN 16     // 16 byte length for random key
 #define RSALEN 128    // 128 byte length for rsa key
@@ -31,16 +31,6 @@ Decryption of messages involves the following steps:
     3. Compute the hash along with the other party's sessionID.
     4. Verify that the hash is consisent with the received HMAC.
     5. Once verified, decrypt the message using RSA.
-*/
-
-/*
-Message Encryption(RSA with HMAC):
-
-The process for encrypting messages involves the following steps:
-    1. A pseudo-random key is generated and encrypted using RSA to be used as the shared key for symmetric encryption.
-    2. The encrypted shared key is sent to the other party.
-    3. Encrypt the message using RSA.
-    4. Compute the ciphertext as the following: c = ENC(message) HMAC(sessionID | random key).
 */
 
 // Generates a 128 bit random key and writes the encrypted version to a file
@@ -179,6 +169,7 @@ void decryptMsg(const char *shared_file, const char *hmacfile, const char *priva
     return;
 }
 
+/*
 int main()
 {
     const char *shared_file = "shared_key.pem";
@@ -207,5 +198,6 @@ int main()
     printf("Decryption: %s\n", dt);
     return 0;
 }
+*/
 
 // gcc -o test protocol.c hmac_sha.c keys.c dh.c rsa_ssl.c prf.c -I/opt/homebrew/Cellar/gmp/6.3.0/include -L/opt/homebrew/Cellar/gmp/6.3.0/lib -lgmp -I/opt/homebrew/opt/openssl@3/include -L/opt/homebrew/opt/openssl@3/lib -lssl -lcrypto

@@ -4,6 +4,7 @@
 #include <openssl/hmac.h>
 #include "prf.h"
 #include "rsa.h"
+#include "hmac.h"
 
 #define RSALEN 128                                // 128 byte length for rsa key
 #define HMACKEYLEN 32                             // 32 byte length for the hmac key
