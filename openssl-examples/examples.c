@@ -108,38 +108,44 @@ void ctr_example()
 }
 
 /* demonstrate RSA keygen,enc,dec */
-#if 0
+#if 1
 void rsa_example()
 {
 	/* first generate a key */
-	RSA* keys = RSA_new();
-	if (!keys) exit(1);
-	BIGNUM* e = BN_new();
-	if (!e) exit(1);
-	BN_set_word(e,RSA_F4); /* e = 65537  */
+	RSA *keys = RSA_new();
+	if (!keys)
+		exit(1);
+	BIGNUM *e = BN_new();
+	if (!e)
+		exit(1);
+	BN_set_word(e, RSA_F4); /* e = 65537  */
 	/* NOTE: if you have an old enough openssl library, you might
 	 * have to setup the random number generator before this call: */
-	int r = RSA_generate_key_ex(keys,2048,e,NULL);
-	if (r != 1) exit(1);
-	PEM_write_RSA_PUBKEY(stdout,keys);
+	int r = RSA_generate_key_ex(keys, 2048, e, NULL);
+	if (r != 1)
+		exit(1);
+	PEM_write_RSA_PUBKEY(stdout, keys);
 	/* NOTE: you could fill in the last 5 parameters if you wanted to
 	 * password protect the private key. */
-	PEM_write_RSAPrivateKey(stdout,keys,NULL,NULL,0,NULL,NULL);
-	char* message = "this is a test message :D";
+	PEM_write_RSAPrivateKey(stdout, keys, NULL, NULL, 0, NULL, NULL);
+	char *message = "this is a test message :D";
 	size_t len = strlen(message);
-	unsigned char* ct = malloc(RSA_size(keys));
-	int ctlen = RSA_public_encrypt(len+1 /* include null char */, (unsigned char*)message,
-			ct, keys, RSA_PKCS1_OAEP_PADDING);
-	if (ctlen == -1) exit(1);
+	unsigned char *ct = malloc(RSA_size(keys));
+	int ctlen = RSA_public_encrypt(len + 1 /* include null char */, (unsigned char *)message,
+								   ct, keys, RSA_PKCS1_OAEP_PADDING);
+	if (ctlen == -1)
+		exit(1);
 	/* print RSA ciphertext */
 	printf("RSA ciphertext:\n");
-	for (int i = 0; i < ctlen; i++) printf("%02x",ct[i]);
+	for (int i = 0; i < ctlen; i++)
+		printf("%02x", ct[i]);
 	printf("\n");
 	/* now try to decrypt */
-	char* pt = malloc(ctlen);
-	size_t ptlen = RSA_private_decrypt(ctlen,ct,(unsigned char*)pt,keys,RSA_PKCS1_OAEP_PADDING);
-	if (ptlen == -1) exit(1);
-	printf("RSA decrypted plaintext:\n%s\n",pt);
+	char *pt = malloc(ctlen);
+	size_t ptlen = RSA_private_decrypt(ctlen, ct, (unsigned char *)pt, keys, RSA_PKCS1_OAEP_PADDING);
+	if (ptlen == -1)
+		exit(1);
+	printf("RSA decrypted plaintext:\n%s\n", pt);
 }
 #endif
 

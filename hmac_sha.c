@@ -13,7 +13,7 @@
 int hmacKeyGen(unsigned char *hmacKey, unsigned char *entropy, size_t len)
 {
     if (entropy != NULL)
-        HMAC(EVP_sha256(), KDFKEY, strlen(KDFKEY), entropy, len, hmacKey, NULL);
+        HMAC(EVP_sha256(), KDFKEY, 32, entropy, len, hmacKey, NULL);
     else
         randBytes(hmacKey, len);
     return 0;
@@ -26,32 +26,34 @@ void sha256_hash(unsigned char *in, unsigned char *out, unsigned char *hmacKey, 
 }
 
 // Generates a hmackey and stores in a file
-void generateHmacKey(const char *hmacfile, RSA_KEY *K)
+void generateHmacKey(const char *hmacfile, const char *public)
 {
     // Create entropy
     unsigned char entropy[HMACKEYLEN];
-    int random = randBytes(entropy, HMACKEYLEN);
-    if (random != 0)
-    {
-        fprintf(stderr, "Error: Failed generating hmac key.\n");
-        return;
-    }
+    randBytes(entropy, HMACKEYLEN);
     // Generate hmackey
     unsigned char buf[HMACKEYLEN];
-    hmacKeyGen(buf, NULL, HMACKEYLEN);
+    hmacKeyGen(buf, entropy, HMACKEYLEN);
+    for (int i = 0; i < HMACKEYLEN; i++)
+    {
+        printf("%02x", buf[i]);
+    }
+    printf("\n");
     // Encrypt hmac key
     unsigned char encrypted[RSALEN];
-    size_t encryptedLen = rsa_encrypt(encrypted, buf, HMACKEYLEN, K);
+    size_t encryptedLen = rsaEncrypt(public, buf, HMACKEYLEN, encrypted);
+    printf("%2zu", encryptedLen);
+    printf("\n");
     if (encryptedLen != RSALEN)
     {
-        fprintf(stderr, "Error: RSA encryption failed.\n");
+        fprintf(stderr, "RSA encryption failed.\n");
         return;
     }
     // Open file to write the hmackey to
-    FILE *file = fopen(hmacfile, "w+b");
+    FILE *file = fopen(hmacfile, "wb");
     if (file == NULL)
     {
-        fprintf(stderr, "Error: Unable to open or create the file.\n");
+        fprintf(stderr, "Unable to open or create the file.\n");
         return;
     }
     // Write the encrypted key to file
@@ -59,14 +61,14 @@ void generateHmacKey(const char *hmacfile, RSA_KEY *K)
     fclose(file);
     if (bytes_written != RSALEN)
     {
-        fprintf(stderr, "Error: Failed to write shared key to file.\n");
+        fprintf(stderr, " Failed to write shared key to file.\n");
         return;
     }
     return;
 }
 
 // Read hmac key from file and write to buffer
-void readHmacKey(const char *hmacfile, unsigned char *out, RSA_KEY *K)
+void readHmacKey(const char *hmacfile, unsigned char *out, const char *private)
 {
     // Open file to read hmackey
     FILE *file = fopen(hmacfile, "rb");
@@ -85,7 +87,7 @@ void readHmacKey(const char *hmacfile, unsigned char *out, RSA_KEY *K)
         return;
     }
     // Decrypt the key
-    size_t decryptedLen = rsa_decrypt(out, buf, RSALEN, K);
+    size_t decryptedLen = rsaDecrypt(private, buf, RSALEN, out);
     if (decryptedLen != HMACKEYLEN)
     {
         fprintf(stderr, "Error: RSA decryption failed.\n");

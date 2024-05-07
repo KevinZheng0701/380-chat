@@ -20,6 +20,7 @@ The process for encrypting messages involves the following steps:
     1. A pseudo-random key is generated and encrypted using RSA to be used as the shared key for symmetric encryption.
     2. The encrypted shared key is sent to the other party.
     3. Encrypt the message using RSA.
+    4. Compute the hmac section using the generated hmackey on the sessionID and the shared key.
     4. Compute the ciphertext as the following: c = ENC(message) HMAC(sessionID | random key).
 
 Message Decryption:
@@ -29,4 +30,4 @@ Decryption of messages involves the following steps:
     2. Decrpyt the secret key to get the pseudo-random key from the other party.
     3. Compute the hash along with the other party's sessionID.
     4. Verify that the hash is consisent with the received HMAC.
-    5. Once verified, decrpyt the message using RSA.
+    5. Once verified, decrypt the message using RSA.
