@@ -35,16 +35,9 @@ void generateHmacKey(const char *hmacfile, const char *public)
     // Generate hmackey
     unsigned char buf[HMACKEYLEN];
     hmacKeyGen(buf, entropy, HMACKEYLEN);
-    for (int i = 0; i < HMACKEYLEN; i++)
-    {
-        printf("%02x", buf[i]);
-    }
-    printf("\n");
     // Encrypt hmac key
     unsigned char encrypted[RSALEN];
     size_t encryptedLen = rsaEncrypt(public, buf, HMACKEYLEN, encrypted);
-    printf("%2zu", encryptedLen);
-    printf("\n");
     if (encryptedLen != RSALEN)
     {
         fprintf(stderr, "RSA encryption failed.\n");
