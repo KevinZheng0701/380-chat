@@ -7,15 +7,27 @@
 #include <openssl/evp.h>
 #include <openssl/hmac.h>
 #include <getopt.h>
+#include <stdio.h>
 #include "dh.h"
 #include "keys.h"
+#include "prf.h"
 #include "rsa.h"
+#include "hmac.h"
+#include "protocol.h"
 
 #ifndef PATH_MAX
 #define PATH_MAX 1024
 #endif
 
+#ifdef __APPLE__
 #define HOST_NAME_MAX _POSIX_HOST_NAME_MAX
+#endif
+
+#define NEWZ(x) \
+	mpz_t x;    \
+	mpz_init(x)
+#define BYTES2Z(x, buf, len) mpz_import(x, len, -1, 1, 0, 0, buf)
+#define Z2BYTES(buf, len, x) mpz_export(buf, &len, -1, 1, 0, 0, x)
 
 static GtkTextBuffer *tbuf; /* transcript buffer */
 static GtkTextBuffer *mbuf; /* message buffer */
@@ -183,6 +195,15 @@ static gboolean shownewmessage(gpointer msg)
 	return 0;
 }
 
+/**********************************FOR PRINTING**********************************************************************/
+void print_key(char *message, mpz_t key)
+{
+	char *key_str = mpz_get_str(NULL, 16, key);
+	printf("%s%.16s\n", message, key_str);
+	free(key_str);
+}
+/**********************************************************************************************************************/
+
 int main(int argc, char *argv[])
 {
 	if (init("params") != 0)
@@ -230,14 +251,210 @@ int main(int argc, char *argv[])
 	 * show the messages in the main window instead of stderr/stdout.  If
 	 * you decide to give that a try, this might be of use:
 	 * https://docs.gtk.org/gtk4/func.is_initialized.html */
+
+	/* Diffie Hellman key exchange + HKDF ********************************************************************************/
 	if (isclient)
 	{
+		printf("-------- CLIENT --------\n");
 		initClientNet(hostname, port);
+
+		// Generate client key pair
+		NEWZ(client_sk);
+		NEWZ(client_pk);
+		dhGen(client_sk, client_pk);
+		print_key("Client-- Client public key: ", client_pk);
+		print_key("Client-- Client private key: ", client_sk);
+		// Send client public key to server
+		char *client_pk_str = mpz_get_str(NULL, 16, client_pk);
+		if (send(sockfd, client_pk_str, strlen(client_pk_str) + 1, 0) == -1)
+		{
+			fprintf(stderr, "Client-- Failed to send public key.\n");
+			return 1;
+		}
+		free(client_pk_str);
+
+		// Receive server public key
+		char server_pk_str[1024]; // Adjust size as per your needs
+		ssize_t nbytes = recv(sockfd, server_pk_str, sizeof(server_pk_str), 0);
+		if (nbytes == -1 || nbytes == 0)
+		{
+			fprintf(stderr, "Client-- Failed to receive data.\n");
+			return 1;
+		}
+
+		// Convert server public key to mpz_t
+		NEWZ(server_pk);
+		int status = mpz_set_str(server_pk, server_pk_str, 16);
+		if (status == -1)
+		{
+			fprintf(stderr, "Server-- Failed to recover data.\n");
+			return 1;
+		}
+		print_key("Client-- Server public key recieved: ", server_pk);
+
+		// Compute the shared secret key
+		NEWZ(shared_secret);
+		mpz_powm(shared_secret, server_pk, client_sk, p); // Compute g^(ab) mod p
+		print_key("Client-- Shared secret: ", shared_secret);
+
+		// Generate session token with random bytes
+		NEWZ(session_id);
+		unsigned char session_token[16];
+		randBytes(session_token, 16);
+		BYTES2Z(session_id, session_token, 16);
+		print_key("Client-- Session token: ", session_id);
+
+		// Receive hash secret from server
+		unsigned char incomingkeys[48];
+		nbytes = recv(sockfd, incomingkeys, 48, 0);
+		if (nbytes == -1 || nbytes == 0)
+		{
+			fprintf(stderr, "Client-- Failed to receive data.\n");
+			return 1;
+		}
+
+		// Prepare buffer for shared secret and session token
+		size_t shared_secret_size = (size_t)mpz_sizeinbase(shared_secret, 256);
+		unsigned char shared_buf[shared_secret_size];
+		Z2BYTES(shared_buf, shared_secret_size, shared_secret);
+
+		// Get the hmackey
+		unsigned char hmackey[32];
+		readHmacKey("hmac.pem", hmackey, "private.pem");
+
+		// Break the data and verify hash
+		unsigned char serverhash[32];
+		memcpy(serverhash, incomingkeys, 32);
+		unsigned char server_id[16];
+		memcpy(server_id, incomingkeys + 32, 16);
+		unsigned char hash[32]; // hash of the client
+		sha256_hash(shared_buf, hash, hmackey, shared_secret_size);
+		if (memcmp(hash, serverhash, 32) != 0)
+		{
+			fprintf(stderr, "Client-- Failed to verify hash secret.\n");
+			return 1;
+		}
+		if (send(sockfd, session_token, 16, 0) == -1)
+		{
+			fprintf(stderr, "Client-- Failed to send session id.\n");
+			return 1;
+		}
+
+		// Covert server id to int
+		NEWZ(sid);
+		BYTES2Z(sid, server_id, 16);
+		print_key("Client-- Handshake completed with server ID: ", sid);
+
+		// Cleanup
+		mpz_clear(client_sk);
+		mpz_clear(client_pk);
+		mpz_clear(server_pk);
+		mpz_clear(shared_secret);
+		mpz_clear(session_id);
+		mpz_clear(sid);
 	}
 	else
 	{
+		printf("-------- SERVER --------\n");
+		// Initialize server network
 		initServerNet(port);
+
+		// Receive client's public key
+		char client_pk_str[1024]; // Adjust size as per your needs
+		ssize_t nbytes = recv(sockfd, client_pk_str, sizeof(client_pk_str), 0);
+		if (nbytes == -1 || nbytes == 0)
+		{
+			fprintf(stderr, "Server-- Failed to receive data.\n");
+			return 1;
+		}
+
+		// Convert client public key to mpz_t
+		NEWZ(client_pk);
+		int status = mpz_set_str(client_pk, client_pk_str, 16);
+		if (status == -1)
+		{
+			fprintf(stderr, "Server-- Failed to recover data.\n");
+			return 1;
+		}
+		print_key("Server-- Client public key recieved: ", client_pk);
+
+		// Generate server's key pair
+		NEWZ(server_sk);
+		NEWZ(server_pk);
+		dhGen(server_sk, server_pk);
+		print_key("Server-- Server public key: ", server_pk);
+		print_key("Server-- Server private key: ", server_sk);
+
+		// Send server's public key to client
+		char *server_pk_str = mpz_get_str(NULL, 16, server_pk);
+		if (send(sockfd, server_pk_str, strlen(server_pk_str) + 1, 0) == -1)
+		{
+			fprintf(stderr, "Server-- Failed to send public key.\n");
+			return 1;
+		}
+		free(server_pk_str);
+
+		// Compute the shared secret key
+		NEWZ(shared_secret);
+		mpz_powm(shared_secret, client_pk, server_sk, p); // Compute g^(ab) mod p
+		print_key("Server-- Shared secret: ", shared_secret);
+		// Generate session token with random bytes
+		NEWZ(session_id);
+		unsigned char session_token[16];
+		randBytes(session_token, 16);
+		BYTES2Z(session_id, session_token, 16);
+		print_key("Server-- Session token: ", session_id);
+
+		// Prepare buffer for shared secret and session token
+		size_t shared_secret_size = (size_t)mpz_sizeinbase(shared_secret, 256);
+		unsigned char shared_buf[shared_secret_size];
+		Z2BYTES(shared_buf, shared_secret_size, shared_secret);
+
+		// Set up RSA keys and HMAC key for hashing
+		generateRSAKeys("public.pem", "private.pem");
+		generateHmacKey("hmac.pem", "public.pem");
+
+		// Get the hmackey
+		unsigned char hmackey[32];
+		readHmacKey("hmac.pem", hmackey, "private.pem");
+
+		// Compute the sha256-hash
+		unsigned char hash[32];
+		sha256_hash(shared_buf, hash, hmackey, shared_secret_size);
+		unsigned char hash_with_token[48]; // 32 bytes for shared secret + 16 bytes session token
+		memcpy(hash_with_token, hash, 32);
+		memcpy(hash_with_token + 32, session_token, 16);
+
+		// Send hash of secret key and session id to client
+		if (send(sockfd, hash_with_token, 48, 0) == -1)
+		{
+			fprintf(stderr, "Server-- Failed to send hash secret with session.\n");
+			return 1;
+		}
+
+		// Receive client id
+		unsigned char client_id[16];
+		nbytes = recv(sockfd, client_id, 16, 0);
+		if (nbytes == -1 || nbytes == 0)
+		{
+			fprintf(stderr, "Server-- Failed to receive client id from client.\n");
+			return 1;
+		}
+
+		// Covert client id to int
+		NEWZ(cid);
+		BYTES2Z(cid, client_id, 16);
+		print_key("Server-- Handshake completed with client ID: ", cid);
+
+		// Cleanup
+		mpz_clear(server_sk);
+		mpz_clear(server_pk);
+		mpz_clear(client_pk);
+		mpz_clear(shared_secret);
+		mpz_clear(session_id);
+		mpz_clear(cid);
 	}
+	/**********************************************************************************************************************/
 
 	/* setup GTK... */
 	GtkBuilder *builder;
@@ -248,6 +465,7 @@ int main(int argc, char *argv[])
 	GError *error = NULL;
 	gtk_init(&argc, &argv);
 	builder = gtk_builder_new();
+
 	if (gtk_builder_add_from_file(builder, "layout.ui", &error) == 0)
 	{
 		g_printerr("Error reading %s\n", error->message);
@@ -256,7 +474,7 @@ int main(int argc, char *argv[])
 	}
 	mark = gtk_text_mark_new(NULL, TRUE);
 	window = gtk_builder_get_object(builder, "window");
-	gtk_widget_set_size_request(GTK_WIDGET(window), 800, 600);
+	gtk_window_set_default_size(GTK_WINDOW(window), 400, 400);
 	g_signal_connect(window, "destroy", G_CALLBACK(gtk_main_quit), NULL);
 	transcript = gtk_builder_get_object(builder, "transcript");
 	tview = GTK_TEXT_VIEW(transcript);
