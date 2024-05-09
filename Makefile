@@ -32,7 +32,7 @@ debug : all
 .PHONY : debug
 # }}}
 
-chat : $(IMPL) dh.o keys.o util.o prf.o hmac.o rsa.o
+chat : $(IMPL) dh.o keys.o util.o prf.o hmac.o rsa.o protocol.o
 	$(LD) $(LDFLAGS) -o $@ $^ $(LDADD)
 
 dh-example : dh-example.o dh.o keys.o util.o

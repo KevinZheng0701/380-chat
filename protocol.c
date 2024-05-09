@@ -27,7 +27,7 @@ Message Decryption:
 
 Decryption of messages involves the following steps:
     1. The ciphertext is broken up into the encrypted message and the HMAC.
-    2. Decrpyt the secret key to get the pseudo-random key from the other party.
+    2. Decrypt the secret key to get the pseudo-random key from the other party.
     3. Compute the hash along with the other party's sessionID.
     4. Verify that the hash is consisent with the received HMAC.
     5. Once verified, decrypt the message using RSA.
@@ -45,7 +45,7 @@ void generateSharedKey(const char *shared_file, const char *public)
     }
     // Encrypt the pseudo-random key
     unsigned char encrypted[RSALEN];
-    size_t encryptedLen = rsaEncrypt(public, buf, KEYLEN, encrypted);
+    size_t encryptedLen = rsaEncrypt(public, (const unsigned char *)buf, KEYLEN, encrypted);
     if (encryptedLen != RSALEN)
     {
         fprintf(stderr, "RSA encryption failed.\n");
@@ -88,7 +88,7 @@ void readSharedKey(const char *shared_file, unsigned char *out, const char *priv
         return;
     }
     // Decrypt the key
-    size_t decryptedLen = rsaDecrypt(private, buf, RSALEN, out);
+    size_t decryptedLen = rsaDecrypt(private, (const unsigned char *)buf, RSALEN, out);
     if (decryptedLen != KEYLEN)
     {
         fprintf(stderr, "RSA decryption failed.\n");
@@ -112,13 +112,13 @@ void computeHMAC(unsigned char *out, unsigned char *sessionID, const char *share
 }
 
 // Perform the entire message encryption
-void encryptMsg(const char *shared_file, const char *hmacfile, const char *public, const char *private, const char *msg, unsigned char *out, unsigned char *sessionID)
+void encryptMsg(const char *shared_file, const char *hmacfile, const char *public, const char *private, const unsigned char *msg, unsigned char *out, unsigned char *sessionID)
 {
     // Generate the shared key
     generateSharedKey(shared_file, public);
     // Perform encryption on the message
     unsigned char encrypted[RSALEN];
-    size_t encryptedLen = rsaEncrypt(public, msg, strlen(msg), encrypted);
+    size_t encryptedLen = rsaEncrypt(public, (const unsigned char *)msg, strlen((const char *)msg), encrypted);
     if (encryptedLen != RSALEN)
     {
         fprintf(stderr, "RSA encryption failed.\n");
@@ -137,7 +137,7 @@ void encryptMsg(const char *shared_file, const char *hmacfile, const char *publi
 }
 
 // Perform the entire message decryption
-void decryptMsg(const char *shared_file, const char *hmacfile, const char *private, const char *ciphertext, unsigned char *out, unsigned char *sessionID)
+void decryptMsg(const char *shared_file, const char *hmacfile, const char *private, const unsigned char *ciphertext, unsigned char *out, unsigned char *sessionID)
 {
     // Break the ciphertext into two parts
     unsigned char encrypted[RSALEN];
@@ -168,7 +168,6 @@ void decryptMsg(const char *shared_file, const char *hmacfile, const char *priva
     }
     return;
 }
-
 /*
 int main()
 {
@@ -176,28 +175,21 @@ int main()
     const char *hmac_file = "hmac_key.pem";
     const char *public_key_file = "public_key.pem";
     const char *private_key_file = "private_key.pem";
-    printf("Generating rsa keys\n");
     generateRSAKeys(public_key_file, private_key_file);
-    printf("Keys generated\n");
-    printf("Generating hmackey\n");
     generateHmacKey(hmac_file, public_key_file);
-    printf("Sucessful generation of hmackey\n");
     unsigned char hmackey[HMACKEYLEN];
     readHmacKey(hmac_file, hmackey, private_key_file);
-    printf("Generating session token.\n");
     unsigned char sessionID[SIDLEN];
     randBytes(sessionID, SIDLEN);
-    printf("Sucessfully session token.\n");
-    unsigned char pt[] = "Hello world this is so cool LOLOLOLOL.";
-    unsigned char ct[RSALEN];
-    unsigned char dt[strlen((const char *)pt) + 1];
+    unsigned char pt[] = "He1123521321521452141llo w1orld. 12313231312312311He1123521321521452141llo w1orld. 123";
+    unsigned char ct[RSALEN + HMACKEYLEN];
+    unsigned char dt[strlen((const char *)pt)];
+    printf("Length: %zu\n", strlen((const char *)pt));
     printf("Plaintext: %s\n", pt);
-    printf("\n");
     encryptMsg(shared_file, hmac_file, public_key_file, private_key_file, (const char *)pt, ct, sessionID);
     decryptMsg(shared_file, hmac_file, private_key_file, (const char *)ct, dt, sessionID);
     printf("Decryption: %s\n", dt);
     return 0;
 }
 */
-
-// gcc -o test protocol.c hmac_sha.c keys.c dh.c rsa_ssl.c prf.c -I/opt/homebrew/Cellar/gmp/6.3.0/include -L/opt/homebrew/Cellar/gmp/6.3.0/lib -lgmp -I/opt/homebrew/opt/openssl@3/include -L/opt/homebrew/opt/openssl@3/lib -lssl -lcrypto
+// gcc -o test protocol.c hmac.c keys.c dh.c rsa.c prf.c -I/opt/homebrew/Cellar/gmp/6.3.0/include -L/opt/homebrew/Cellar/gmp/6.3.0/lib -lgmp -I/opt/homebrew/opt/openssl@3/include -L/opt/homebrew/opt/openssl@3/lib -lssl -lcrypto

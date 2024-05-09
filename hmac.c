@@ -37,7 +37,7 @@ void generateHmacKey(const char *hmacfile, const char *public)
     hmacKeyGen(buf, entropy, HMACKEYLEN);
     // Encrypt hmac key
     unsigned char encrypted[RSALEN];
-    size_t encryptedLen = rsaEncrypt(public, buf, HMACKEYLEN, encrypted);
+    size_t encryptedLen = rsaEncrypt(public, (const unsigned char *)buf, HMACKEYLEN, encrypted);
     if (encryptedLen != RSALEN)
     {
         fprintf(stderr, "RSA encryption failed.\n");
@@ -68,7 +68,7 @@ void readHmacKey(const char *hmacfile, unsigned char *out, const char *private)
     FILE *file = fopen(hmacfile, "rb");
     if (file == NULL)
     {
-        fprintf(stderr, "Error: Unable to open and read the file.\n");
+        fprintf(stderr, "Unable to open and read the file.\n");
         return;
     }
     // Write key to buffer
@@ -77,14 +77,14 @@ void readHmacKey(const char *hmacfile, unsigned char *out, const char *private)
     fclose(file);
     if (bytes_read != RSALEN)
     {
-        fprintf(stderr, "Error: Failed to read hmackey to file.\n");
+        fprintf(stderr, "Failed to read hmackey to file.\n");
         return;
     }
     // Decrypt the key
-    size_t decryptedLen = rsaDecrypt(private, buf, RSALEN, out);
+    size_t decryptedLen = rsaDecrypt(private, (const unsigned char *)buf, RSALEN, out);
     if (decryptedLen != HMACKEYLEN)
     {
-        fprintf(stderr, "Error: RSA decryption failed.\n");
+        fprintf(stderr, "RSA decryption failed.\n");
         return;
     }
     return;

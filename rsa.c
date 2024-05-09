@@ -71,10 +71,16 @@ size_t rsaEncrypt(const char *public, const unsigned char *in, size_t inLen,
         fprintf(stderr, "Failed to read public key.\n");
         return 0;
     }
+    size_t maxEncryptSize = RSALEN - 42; // Max size for RSA with OAEP
+    if (inLen > maxEncryptSize)
+    {
+        fprintf(stderr, "Input data size exceeds the maximum allowed for RSA encryption.\n");
+        return 0;
+    }
     size_t outLen = RSA_public_encrypt(inLen, in, out, key, RSA_PKCS1_OAEP_PADDING);
     if (outLen == -1)
     {
-        fprintf(stderr, "Failed to encrypt key.\n");
+        fprintf(stderr, "Failed to encrypt message.\n");
         RSA_free(key);
         return 0;
     }
@@ -89,20 +95,20 @@ size_t rsaDecrypt(const char *private, const unsigned char *in, size_t inLen,
     FILE *file = fopen(private, "rb");
     if (!file)
     {
-        fprintf(stderr, "Failed to open private key file for reading\n");
+        fprintf(stderr, "Failed to open private key file for reading.\n");
         return 0;
     }
     RSA *key = PEM_read_RSAPrivateKey(file, NULL, NULL, NULL);
     fclose(file);
     if (!key)
     {
-        fprintf(stderr, "Failed to read private key\n");
+        fprintf(stderr, "Failed to read private key.\n");
         return 0;
     }
     size_t outLen = RSA_private_decrypt(inLen, in, out, key, RSA_PKCS1_OAEP_PADDING);
     if (outLen == -1)
     {
-        fprintf(stderr, "RSA decryption failed\n");
+        fprintf(stderr, "Failed to decrypt message.\n");
         RSA_free(key);
         return 0;
     }

@@ -27,7 +27,7 @@
 	mpz_t x;    \
 	mpz_init(x)
 #define BYTES2Z(x, buf, len) mpz_import(x, len, -1, 1, 0, 0, buf)
-#define Z2BYTES(buf, len, x) mpz_export(buf, &len, -1, 1, 0, 0, x)
+#define Z2BYTES(buf, len, x) mpz_export(buf, len, -1, 1, 0, 0, x)
 
 static GtkTextBuffer *tbuf; /* transcript buffer */
 static GtkTextBuffer *mbuf; /* message buffer */
@@ -36,6 +36,13 @@ static GtkTextMark *mark;	/* used for scrolling to end of transcript, etc */
 
 static pthread_t trecv; /* wait for incoming messagess and post to queue */
 void *recvMsg(void *);	/* for trecv */
+
+mpz_t my_id;								  // your current session id
+mpz_t other_id;								  // session id of the other connection
+const char *public_key_file = "public.pem";	  // file for public RSA keys
+const char *private_key_file = "private.pem"; // file for private RSA keys
+const char *hmac_key_file = "hmac.pem";		  // file for encrypted hmac key
+const char *shared_key_file = "shared.pem";	  // file for encrypted shared key
 
 #define max(a, b) \
 	({ typeof(a) _a = a;    \
@@ -171,12 +178,25 @@ static void sendMessage(GtkWidget *w /* <-- msg entry widget */, gpointer /* dat
 	gtk_text_buffer_get_end_iter(mbuf, &mend);
 	char *message = gtk_text_buffer_get_text(mbuf, &mstart, &mend, 1);
 	size_t len = g_utf8_strlen(message, -1);
+	if (len == 0)
+	{
+		error("No input given.");
+	}
 	/* XXX we should probably do the actual network stuff in a different
 	 * thread and have it call this once the message is actually sent. */
+	unsigned char ciphertext[160]; // RSA key has length 128 + 32 for HMAC
+	unsigned char session_id[16];
+	size_t session_size = sizeof(session_id);
+	Z2BYTES(session_id, &session_size, my_id);
+	encryptMsg(shared_key_file, hmac_key_file, public_key_file, private_key_file, (const unsigned char *)message, ciphertext, session_id);
+	for (size_t i = 0; i < 160; i++)
+	{
+		printf("%02X", ciphertext[i]);
+	}
+	printf("\n");
 	ssize_t nbytes;
-	if ((nbytes = send(sockfd, message, len, 0)) == -1)
-		error("send failed");
-
+	if ((nbytes = send(sockfd, ciphertext, 160, 0)) == -1)
+		error("Send failed");
 	tsappend(message, NULL, 1);
 	free(message);
 	/* clear message text and reset focus */
@@ -187,7 +207,7 @@ static void sendMessage(GtkWidget *w /* <-- msg entry widget */, gpointer /* dat
 static gboolean shownewmessage(gpointer msg)
 {
 	char *tags[2] = {"friend", NULL};
-	char *friendname = "mr. friend: ";
+	char *friendname = "Mr. friend: ";
 	tsappend(friendname, tags, 0);
 	char *message = (char *)msg;
 	tsappend(message, NULL, 1);
@@ -257,7 +277,8 @@ int main(int argc, char *argv[])
 	{
 		printf("-------- CLIENT --------\n");
 		initClientNet(hostname, port);
-
+		mpz_init(my_id);
+		mpz_init(other_id);
 		// Generate client key pair
 		NEWZ(client_sk);
 		NEWZ(client_pk);
@@ -302,6 +323,7 @@ int main(int argc, char *argv[])
 		unsigned char session_token[16];
 		randBytes(session_token, 16);
 		BYTES2Z(session_id, session_token, 16);
+		mpz_set(my_id, session_id);
 		print_key("Client-- Session token: ", session_id);
 
 		// Receive hash secret from server
@@ -316,11 +338,11 @@ int main(int argc, char *argv[])
 		// Prepare buffer for shared secret and session token
 		size_t shared_secret_size = (size_t)mpz_sizeinbase(shared_secret, 256);
 		unsigned char shared_buf[shared_secret_size];
-		Z2BYTES(shared_buf, shared_secret_size, shared_secret);
+		Z2BYTES(shared_buf, &shared_secret_size, shared_secret);
 
 		// Get the hmackey
 		unsigned char hmackey[32];
-		readHmacKey("hmac.pem", hmackey, "private.pem");
+		readHmacKey(hmac_key_file, hmackey, private_key_file);
 
 		// Break the data and verify hash
 		unsigned char serverhash[32];
@@ -343,6 +365,7 @@ int main(int argc, char *argv[])
 		// Covert server id to int
 		NEWZ(sid);
 		BYTES2Z(sid, server_id, 16);
+		mpz_set(other_id, sid);
 		print_key("Client-- Handshake completed with server ID: ", sid);
 
 		// Cleanup
@@ -358,7 +381,8 @@ int main(int argc, char *argv[])
 		printf("-------- SERVER --------\n");
 		// Initialize server network
 		initServerNet(port);
-
+		mpz_init(my_id);
+		mpz_init(other_id);
 		// Receive client's public key
 		char client_pk_str[1024]; // Adjust size as per your needs
 		ssize_t nbytes = recv(sockfd, client_pk_str, sizeof(client_pk_str), 0);
@@ -403,20 +427,21 @@ int main(int argc, char *argv[])
 		unsigned char session_token[16];
 		randBytes(session_token, 16);
 		BYTES2Z(session_id, session_token, 16);
+		mpz_set(my_id, session_id);
 		print_key("Server-- Session token: ", session_id);
 
 		// Prepare buffer for shared secret and session token
 		size_t shared_secret_size = (size_t)mpz_sizeinbase(shared_secret, 256);
 		unsigned char shared_buf[shared_secret_size];
-		Z2BYTES(shared_buf, shared_secret_size, shared_secret);
+		Z2BYTES(shared_buf, &shared_secret_size, shared_secret);
 
 		// Set up RSA keys and HMAC key for hashing
-		generateRSAKeys("public.pem", "private.pem");
-		generateHmacKey("hmac.pem", "public.pem");
+		generateRSAKeys(public_key_file, private_key_file);
+		generateHmacKey(hmac_key_file, public_key_file);
 
 		// Get the hmackey
 		unsigned char hmackey[32];
-		readHmacKey("hmac.pem", hmackey, "private.pem");
+		readHmacKey(hmac_key_file, hmackey, private_key_file);
 
 		// Compute the sha256-hash
 		unsigned char hash[32];
@@ -444,6 +469,7 @@ int main(int argc, char *argv[])
 		// Covert client id to int
 		NEWZ(cid);
 		BYTES2Z(cid, client_id, 16);
+		mpz_set(other_id, cid);
 		print_key("Server-- Handshake completed with client ID: ", cid);
 
 		// Cleanup
@@ -474,7 +500,7 @@ int main(int argc, char *argv[])
 	}
 	mark = gtk_text_mark_new(NULL, TRUE);
 	window = gtk_builder_get_object(builder, "window");
-	gtk_window_set_default_size(GTK_WINDOW(window), 400, 400);
+	gtk_window_set_default_size(GTK_WINDOW(window), 800, 800);
 	g_signal_connect(window, "destroy", G_CALLBACK(gtk_main_quit), NULL);
 	transcript = gtk_builder_get_object(builder, "transcript");
 	tview = GTK_TEXT_VIEW(transcript);
@@ -522,14 +548,28 @@ void *recvMsg(void *)
 		{
 			/* XXX maybe show in a status message that the other
 			 * side has disconnected. */
+			error("Other party disconnected.");
+			tsappend("Other party disconnected...", NULL, 1);
 			return 0;
 		}
-		char *m = malloc(maxlen + 2);
-		memcpy(m, msg, nbytes);
-		if (m[nbytes - 1] != '\n')
-			m[nbytes++] = '\n';
-		m[nbytes] = 0;
-		g_main_context_invoke(NULL, shownewmessage, (gpointer)m);
+		unsigned char *message = malloc(maxlen + 2);
+		if (message == NULL)
+			error("Memory allocation failed");
+		msg[nbytes] = '\0';
+		printf("\n");
+		for (int i = 0; i < nbytes; i++)
+		{
+			printf("%02X ", message[i]);
+		}
+		unsigned char session_id[16];
+		size_t session_size = sizeof(session_id);
+		Z2BYTES(session_id, &session_size, other_id);
+		decryptMsg(shared_key_file, hmac_key_file, private_key_file, (const unsigned char *)msg, message, session_id);
+		if (message[nbytes - 1] != '\n')
+			message[nbytes++] = '\n';
+		message[nbytes] = '\0';
+		printf("Decrypted Message: %s\n", message);
+		g_main_context_invoke(NULL, shownewmessage, (gpointer)message);
 	}
 	return 0;
 }
