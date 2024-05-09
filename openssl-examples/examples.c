@@ -92,9 +92,9 @@ void ctr_example()
 	if (1 != EVP_DecryptInit_ex(ctx, EVP_aes_256_ctr(), 0, key, iv))
 		ERR_print_errors_fp(stderr);
 #if 0
-	if (1!=EVP_DecryptUpdate(ctx,pt,&nWritten,ct,ctlen))
+	if (1 != EVP_DecryptUpdate(ctx, pt, &nWritten, ct, ctlen))
 		ERR_print_errors_fp(stderr);
-	printf("decrypted %i bytes:\n%s\n",nWritten,pt);
+	printf("decrypted %i bytes:\n%s\n", nWritten, pt);
 #endif
 	for (size_t i = 0; i < len; i++)
 	{
@@ -160,5 +160,7 @@ int main()
 	sha_example();
 	printf("~~~~~~~~~~~~~~~~~~~~~~~\n");
 	hmac_example();
+	printf("~~~~~~~~~~~~~~~~~~~~~~~\n");
+	rsa_example();
 	return 0;
 }

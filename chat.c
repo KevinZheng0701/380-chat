@@ -168,10 +168,8 @@ static void tsappend(char *message, char **tagnames, int ensurenewline)
 	gtk_text_buffer_delete_mark(tbuf, mark);
 }
 
-static void sendMessage(GtkWidget *w /* <-- msg entry widget */, gpointer /* data */)
+static void sendMessage(GtkWidget *w /* <-- msg entry widget */, gpointer data /* data */)
 {
-	char *tags[2] = {"self", NULL};
-	tsappend("me: ", tags, 0);
 	GtkTextIter mstart; /* start of message pointer */
 	GtkTextIter mend;	/* end of message pointer */
 	gtk_text_buffer_get_start_iter(mbuf, &mstart);
@@ -180,20 +178,19 @@ static void sendMessage(GtkWidget *w /* <-- msg entry widget */, gpointer /* dat
 	size_t len = g_utf8_strlen(message, -1);
 	if (len == 0)
 	{
-		error("No input given.");
+		return;
 	}
+	char *tags[2] = {"self", NULL};
+	tsappend("me: ", tags, 0);
 	/* XXX we should probably do the actual network stuff in a different
 	 * thread and have it call this once the message is actually sent. */
 	unsigned char ciphertext[160]; // RSA key has length 128 + 32 for HMAC
 	unsigned char session_id[16];
 	size_t session_size = sizeof(session_id);
 	Z2BYTES(session_id, &session_size, my_id);
-	encryptMsg(shared_key_file, hmac_key_file, public_key_file, private_key_file, (const unsigned char *)message, ciphertext, session_id);
-	for (size_t i = 0; i < 160; i++)
-	{
-		printf("%02X", ciphertext[i]);
-	}
-	printf("\n");
+	size_t encryptedLen = encryptMsg(shared_key_file, hmac_key_file, public_key_file, private_key_file, (const unsigned char *)message, ciphertext, session_id);
+	if (encryptedLen != 160)
+		error("Encrpytion failed aborting...");
 	ssize_t nbytes;
 	if ((nbytes = send(sockfd, ciphertext, 160, 0)) == -1)
 		error("Send failed");
@@ -535,7 +532,7 @@ int main(int argc, char *argv[])
 
 /* thread function to listen for new messages and post them to the gtk
  * main loop for processing: */
-void *recvMsg(void *)
+void *recvMsg()
 {
 	size_t maxlen = 512;
 	char msg[maxlen + 2]; /* might add \n and \0 */
@@ -548,27 +545,22 @@ void *recvMsg(void *)
 		{
 			/* XXX maybe show in a status message that the other
 			 * side has disconnected. */
-			error("Other party disconnected.");
 			tsappend("Other party disconnected...", NULL, 1);
 			return 0;
 		}
-		unsigned char *message = malloc(maxlen + 2);
+		if (msg[nbytes - 1] != '\n')
+			msg[nbytes++] = '\n';
+		msg[nbytes] = '\0';
+		unsigned char *message = malloc(nbytes + 1);
 		if (message == NULL)
 			error("Memory allocation failed");
-		msg[nbytes] = '\0';
-		printf("\n");
-		for (int i = 0; i < nbytes; i++)
-		{
-			printf("%02X ", message[i]);
-		}
 		unsigned char session_id[16];
 		size_t session_size = sizeof(session_id);
 		Z2BYTES(session_id, &session_size, other_id);
-		decryptMsg(shared_key_file, hmac_key_file, private_key_file, (const unsigned char *)msg, message, session_id);
-		if (message[nbytes - 1] != '\n')
-			message[nbytes++] = '\n';
-		message[nbytes] = '\0';
-		printf("Decrypted Message: %s\n", message);
+		size_t decryptedLen = decryptMsg(shared_key_file, hmac_key_file, private_key_file, (const unsigned char *)msg, message, session_id);
+		if (decryptedLen == 0)
+			error("Decryption failed aborting...");
+		message[decryptedLen] = '\0';
 		g_main_context_invoke(NULL, shownewmessage, (gpointer)message);
 	}
 	return 0;
