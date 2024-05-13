@@ -182,20 +182,24 @@ static void sendMessage(GtkWidget *w /* <-- msg entry widget */, gpointer data /
 	}
 	char *tags[2] = {"self", NULL};
 	tsappend("me: ", tags, 0);
+	
 	/* XXX we should probably do the actual network stuff in a different
 	 * thread and have it call this once the message is actually sent. */
 	unsigned char ciphertext[160]; // RSA key has length 128 + 32 for HMAC
 	unsigned char session_id[16];
 	size_t session_size = sizeof(session_id);
 	Z2BYTES(session_id, &session_size, my_id);
+
 	size_t encryptedLen = encryptMsg(shared_key_file, hmac_key_file, public_key_file, private_key_file, (const unsigned char *)message, ciphertext, session_id);
 	if (encryptedLen != 160)
 		error("Encrpytion failed aborting...");
 	ssize_t nbytes;
 	if ((nbytes = send(sockfd, ciphertext, 160, 0)) == -1)
 		error("Send failed");
+	
 	tsappend(message, NULL, 1);
 	free(message);
+	
 	/* clear message text and reset focus */
 	gtk_text_buffer_delete(mbuf, &mstart, &mend);
 	gtk_widget_grab_focus(w);
@@ -534,34 +538,54 @@ int main(int argc, char *argv[])
  * main loop for processing: */
 void *recvMsg()
 {
-	size_t maxlen = 512;
-	char msg[maxlen + 2]; /* might add \n and \0 */
-	ssize_t nbytes;
-	while (1)
-	{
-		if ((nbytes = recv(sockfd, msg, maxlen, 0)) == -1)
-			error("recv failed");
-		if (nbytes == 0)
-		{
-			/* XXX maybe show in a status message that the other
-			 * side has disconnected. */
-			tsappend("Other party disconnected...", NULL, 1);
-			return 0;
-		}
-		if (msg[nbytes - 1] != '\n')
-			msg[nbytes++] = '\n';
-		msg[nbytes] = '\0';
-		unsigned char *message = malloc(nbytes + 1);
-		if (message == NULL)
-			error("Memory allocation failed");
-		unsigned char session_id[16];
-		size_t session_size = sizeof(session_id);
-		Z2BYTES(session_id, &session_size, other_id);
-		size_t decryptedLen = decryptMsg(shared_key_file, hmac_key_file, private_key_file, (const unsigned char *)msg, message, session_id);
-		if (decryptedLen == 0)
-			error("Decryption failed aborting...");
-		message[decryptedLen] = '\0';
-		g_main_context_invoke(NULL, shownewmessage, (gpointer)message);
-	}
-	return 0;
+    size_t maxlen = 512;
+    char msg[maxlen + 2]; /* might add \n and \0 */
+    ssize_t nbytes;
+    char *complete_message = NULL;
+    while (1)
+    {
+        if ((nbytes = recv(sockfd, msg, maxlen, 0)) == -1)
+            error("recv failed");
+        if (nbytes == 0)
+        {
+            /* XXX maybe show in a status message that the other
+             * side has disconnected. */
+            tsappend("Other party disconnected...", NULL, 1);
+            return 0;
+        }
+        if (msg[nbytes - 1] != '\n')
+            msg[nbytes++] = '\n';
+        msg[nbytes] = '\0';
+        unsigned char *message = malloc(nbytes + 1);
+        if (message == NULL)
+            error("Memory allocation failed");
+        unsigned char session_id[16];
+        size_t session_size = sizeof(session_id);
+        Z2BYTES(session_id, &session_size, other_id);
+        size_t decryptedLen = decryptMsg(shared_key_file, hmac_key_file, private_key_file, (const unsigned char *)msg, message, session_id);
+        if (decryptedLen == 0)
+            error("Decryption failed aborting...");
+        message[decryptedLen] = '\0';
+
+        /* Concatenate the decrypted chunk to the complete message */
+        if (complete_message == NULL)
+        {
+            complete_message = strdup((char *)message);
+        }
+        else
+        {
+            complete_message = realloc(complete_message, strlen(complete_message) + strlen((char *)message) + 1);
+            strcat(complete_message, (char *)message);
+        }
+
+        /* If the received chunk is less than 1024 bits, it's the last chunk */
+        if (nbytes < 160)
+        {
+            g_main_context_invoke(NULL, shownewmessage, (gpointer)complete_message);
+            complete_message = NULL;
+        }
+
+        free(message);
+    }
+    return 0;
 }
