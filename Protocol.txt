@@ -1,6 +1,6 @@
 Secure Chat System Protocol:
 
-Authentication Handshake (SSH):
+Authentication Handshake (Diffie-Hellman):
 
 To establish a secure handshake at the beginning of each session, we employ the Diffie-Hellman key exchange with ephemeral keys, complemented by unique session tokens and hashing procedures.
 Here's a breakdown of the key exchange process:
@@ -31,3 +31,5 @@ Decryption of messages involves the following steps:
     3. Compute the hash along with the other party's sessionID.
     4. Verify that the hash is consisent with the received HMAC.
     5. Once verified, decrypt the message using RSA.
+
+From the protocol above, two parties can establish a secure connection via a blend of SSH and Diffie-Hellman, and messages are encrypted using RSA with HMAC. This ensures the integrity of messages exchanged between communicating parties achieved through HMAC. Moreover, assuming the adversary doesn't have access to the files where the secret keys are stored, RSA encryption will make it hard for any adversary to find the correct plaintext, unlike the other party that has access to the secret key. We assume the adversary can only read through the source code and intercept messages in between. They might also keep track of intercepted messages' records, but that won't be useful in our protocol as we set up new Diffie-Hellman keys in every session along with new session IDs for the two parties ensuring forward secrecy. Another key note is that since our encryption only relies on RSA encryption, the length of the messages we can send is limited to a certain number of characters. This lack of longer messages can, however, provide better protection if an adversary is impersonating another party and tries to send some malicious message/code through the chat system. What happens is that the encryption would have failed in such a case, causing an error and thus not allowing the message to be sent and causing errors to allow the other party to acknowledge the connection has been compromised by removing both users from the connection. Hopeful the claims here are correct and securely provide the connection for the two parties and maximize protection against unwanted adversaries.

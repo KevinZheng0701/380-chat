@@ -280,9 +280,9 @@ int main(int argc, char *argv[])
 		NEWZ(client_sk);
 		NEWZ(client_pk);
 		dhGen(client_sk, client_pk);
-		print_key("Client-- Client public key: ", client_pk);
-		print_key("Client-- Client private key: ", client_sk);
-		// Send client public key to server
+		// print_key("Client-- Client public key: ", client_pk);
+		// print_key("Client-- Client private key: ", client_sk);
+		//  Send client public key to server
 		char *client_pk_str = mpz_get_str(NULL, 16, client_pk);
 		if (send(sockfd, client_pk_str, strlen(client_pk_str) + 1, 0) == -1)
 		{
@@ -290,7 +290,6 @@ int main(int argc, char *argv[])
 			return 1;
 		}
 		free(client_pk_str);
-
 		// Receive server public key
 		char server_pk_str[1024]; // Adjust size as per your needs
 		ssize_t nbytes = recv(sockfd, server_pk_str, sizeof(server_pk_str), 0);
@@ -299,7 +298,6 @@ int main(int argc, char *argv[])
 			fprintf(stderr, "Client-- Failed to receive data.\n");
 			return 1;
 		}
-
 		// Convert server public key to mpz_t
 		NEWZ(server_pk);
 		int status = mpz_set_str(server_pk, server_pk_str, 16);
@@ -308,22 +306,19 @@ int main(int argc, char *argv[])
 			fprintf(stderr, "Server-- Failed to recover data.\n");
 			return 1;
 		}
-		print_key("Client-- Server public key recieved: ", server_pk);
-
-		// Compute the shared secret key
+		// print_key("Client-- Server public key recieved: ", server_pk);
+		//  Compute the shared secret key
 		NEWZ(shared_secret);
 		mpz_powm(shared_secret, server_pk, client_sk, p); // Compute g^(ab) mod p
-		print_key("Client-- Shared secret: ", shared_secret);
-
-		// Generate session token with random bytes
+		// print_key("Client-- Shared secret: ", shared_secret);
+		//  Generate session token with random bytes
 		NEWZ(session_id);
 		unsigned char session_token[16];
 		randBytes(session_token, 16);
 		BYTES2Z(session_id, session_token, 16);
 		mpz_set(my_id, session_id);
-		print_key("Client-- Session token: ", session_id);
-
-		// Receive hash secret from server
+		// print_key("Client-- Session token: ", session_id);
+		//  Receive hash secret from server
 		unsigned char incomingkeys[48];
 		nbytes = recv(sockfd, incomingkeys, 48, 0);
 		if (nbytes == -1 || nbytes == 0)
@@ -331,16 +326,13 @@ int main(int argc, char *argv[])
 			fprintf(stderr, "Client-- Failed to receive data.\n");
 			return 1;
 		}
-
 		// Prepare buffer for shared secret and session token
 		size_t shared_secret_size = (size_t)mpz_sizeinbase(shared_secret, 256);
 		unsigned char shared_buf[shared_secret_size];
 		Z2BYTES(shared_buf, &shared_secret_size, shared_secret);
-
 		// Get the hmackey
 		unsigned char hmackey[32];
 		readHmacKey(hmac_key_file, hmackey, private_key_file);
-
 		// Break the data and verify hash
 		unsigned char serverhash[32];
 		memcpy(serverhash, incomingkeys, 32);
@@ -364,7 +356,6 @@ int main(int argc, char *argv[])
 		BYTES2Z(sid, server_id, 16);
 		mpz_set(other_id, sid);
 		print_key("Client-- Handshake completed with server ID: ", sid);
-
 		// Cleanup
 		mpz_clear(client_sk);
 		mpz_clear(client_pk);
@@ -388,7 +379,6 @@ int main(int argc, char *argv[])
 			fprintf(stderr, "Server-- Failed to receive data.\n");
 			return 1;
 		}
-
 		// Convert client public key to mpz_t
 		NEWZ(client_pk);
 		int status = mpz_set_str(client_pk, client_pk_str, 16);
@@ -397,16 +387,14 @@ int main(int argc, char *argv[])
 			fprintf(stderr, "Server-- Failed to recover data.\n");
 			return 1;
 		}
-		print_key("Server-- Client public key recieved: ", client_pk);
-
-		// Generate server's key pair
+		// print_key("Server-- Client public key recieved: ", client_pk);
+		//  Generate server's key pair
 		NEWZ(server_sk);
 		NEWZ(server_pk);
 		dhGen(server_sk, server_pk);
-		print_key("Server-- Server public key: ", server_pk);
-		print_key("Server-- Server private key: ", server_sk);
-
-		// Send server's public key to client
+		// print_key("Server-- Server public key: ", server_pk);
+		// print_key("Server-- Server private key: ", server_sk);
+		//  Send server's public key to client
 		char *server_pk_str = mpz_get_str(NULL, 16, server_pk);
 		if (send(sockfd, server_pk_str, strlen(server_pk_str) + 1, 0) == -1)
 		{
@@ -414,46 +402,39 @@ int main(int argc, char *argv[])
 			return 1;
 		}
 		free(server_pk_str);
-
 		// Compute the shared secret key
 		NEWZ(shared_secret);
 		mpz_powm(shared_secret, client_pk, server_sk, p); // Compute g^(ab) mod p
-		print_key("Server-- Shared secret: ", shared_secret);
-		// Generate session token with random bytes
+		// print_key("Server-- Shared secret: ", shared_secret);
+		//  Generate session token with random bytes
 		NEWZ(session_id);
 		unsigned char session_token[16];
 		randBytes(session_token, 16);
 		BYTES2Z(session_id, session_token, 16);
 		mpz_set(my_id, session_id);
-		print_key("Server-- Session token: ", session_id);
-
-		// Prepare buffer for shared secret and session token
+		// print_key("Server-- Session token: ", session_id);
+		//  Prepare buffer for shared secret and session token
 		size_t shared_secret_size = (size_t)mpz_sizeinbase(shared_secret, 256);
 		unsigned char shared_buf[shared_secret_size];
 		Z2BYTES(shared_buf, &shared_secret_size, shared_secret);
-
 		// Set up RSA keys and HMAC key for hashing
 		generateRSAKeys(public_key_file, private_key_file);
 		generateHmacKey(hmac_key_file, public_key_file);
-
 		// Get the hmackey
 		unsigned char hmackey[32];
 		readHmacKey(hmac_key_file, hmackey, private_key_file);
-
 		// Compute the sha256-hash
 		unsigned char hash[32];
 		sha256_hash(shared_buf, hash, hmackey, shared_secret_size);
 		unsigned char hash_with_token[48]; // 32 bytes for shared secret + 16 bytes session token
 		memcpy(hash_with_token, hash, 32);
 		memcpy(hash_with_token + 32, session_token, 16);
-
 		// Send hash of secret key and session id to client
 		if (send(sockfd, hash_with_token, 48, 0) == -1)
 		{
 			fprintf(stderr, "Server-- Failed to send hash secret with session.\n");
 			return 1;
 		}
-
 		// Receive client id
 		unsigned char client_id[16];
 		nbytes = recv(sockfd, client_id, 16, 0);
@@ -462,13 +443,11 @@ int main(int argc, char *argv[])
 			fprintf(stderr, "Server-- Failed to receive client id from client.\n");
 			return 1;
 		}
-
 		// Covert client id to int
 		NEWZ(cid);
 		BYTES2Z(cid, client_id, 16);
 		mpz_set(other_id, cid);
 		print_key("Server-- Handshake completed with client ID: ", cid);
-
 		// Cleanup
 		mpz_clear(server_sk);
 		mpz_clear(server_pk);
